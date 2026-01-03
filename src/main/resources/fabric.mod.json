@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "thegreatbot",
+  "version": "${version}",
+  "name": "TheGreatBot",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "BSD-3-Clause",
+  "icon": "assets/thegreatbot/icon.png",
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      "xyz.bednarczyk.thegreatbot.TheGreatBot"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
