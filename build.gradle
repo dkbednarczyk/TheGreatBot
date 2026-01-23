@@ -42,10 +42,11 @@ dependencies {
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    modImplementation("com.fasterxml.jackson.core:jackson-databind:2.21.0")
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
-    shadow("net.dv8tion:JDA:5.6.1")
-    modImplementation("net.dv8tion:JDA:5.6.1")
+    shadow("net.dv8tion:JDA:6.3.0")
+    modImplementation("net.dv8tion:JDA:6.3.0")
 }
 
 shadowJar {
@@ -74,7 +75,7 @@ processResources {
     inputs.property "version", project.version
     inputs.property "minecraft_version", project.minecraft_version
     inputs.property "loader_version", project.loader_version
-    filteringCharset "UTF-8"
+    filteringCharset = "UTF-8"
 
     filesMatching("fabric.mod.json") {
         expand "version": project.version,

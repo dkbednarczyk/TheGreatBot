@@ -10,28 +10,28 @@ import org.slf4j.LoggerFactory;
 import java.security.SecureRandom;
 import java.text.DecimalFormat;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 public class Activation {
     private static final long CODE_EXPIRY_MINUTES = 30;
     private static final Logger LOGGER = LoggerFactory.getLogger(TheGreatBot.MOD_ID);
-    public static final Map<String, Activation> pendingActivations = new ConcurrentHashMap<>();
+    private static final Map<String, Activation> pendingActivations = new ConcurrentHashMap<>();
 
-    public final String playerName;
+    private final UUID playerUUID;
+    private final String playerName;
     private final long timestamp;
 
-    public Activation(String playerName) {
-        this.playerName = playerName;
+    public Activation(ServerPlayerEntity player) {
+        this.playerUUID = player.getUuid();
+        this.playerName = player.getStringifiedName();
         this.timestamp = System.currentTimeMillis();
     }
 
-    public boolean isExpired() {
-        return System.currentTimeMillis() - timestamp > TimeUnit.MINUTES.toMillis(CODE_EXPIRY_MINUTES);
-    }
-
-    public static void startActivationSequence(ServerPlayerEntity player, String playerName) {
-        String existingCode = findCodeForPlayer(playerName);
+    public static void startActivationSequence(ServerPlayerEntity player) {
+        UUID playerUUID = player.getUuid();
+        String existingCode = findCodeForPlayer(playerUUID);
 
         if (existingCode != null) {
             Activation existing = pendingActivations.get(existingCode);
@@ -56,38 +56,64 @@ public class Activation {
                 player.networkHandler.disconnect(Text.literal("Failed to generate activation code. Please try again."));
                 return;
             }
-        } while (pendingActivations.putIfAbsent(code, new Activation(playerName)) != null);
+        } while (pendingActivations.putIfAbsent(code, new Activation(player)) != null);
 
-        LOGGER.info("Generated activation code for player: {}", playerName);
+        LOGGER.info("Generated activation code for player: {}", player.getStringifiedName());
         sendActivationMessages(player, code);
     }
 
-    public static String findCodeForPlayer(String playerName) {
-        for (Map.Entry<String, Activation> entry : pendingActivations.entrySet()) {
-            if (entry.getValue().playerName.equalsIgnoreCase(playerName)) {
+    public static String findCodeForPlayer(UUID playerUUID) {
+        for (var entry : pendingActivations.entrySet()) {
+            if (entry.getValue().playerUUID.equals(playerUUID)) {
                 return entry.getKey();
             }
         }
         return null;
     }
 
+    static Activation get(String code) {
+        return pendingActivations.get(code);
+    }
+
+    static void remove(String code) {
+        pendingActivations.remove(code);
+    }
+
+    static boolean removeForPlayer(UUID playerUUID) {
+        var initialSize = pendingActivations.size();
+        pendingActivations.entrySet().removeIf(entry -> entry.getValue().playerUUID.equals(playerUUID));
+        return pendingActivations.size() < initialSize;
+    }
+
+    static void cleanupExpired() {
+        pendingActivations.entrySet().removeIf(e -> e.getValue().isExpired());
+    }
+
+    static int pendingCount() {
+        return pendingActivations.size();
+    }
 
     private static void sendActivationMessages(ServerPlayerEntity player, String code) {
         player.changeGameMode(GameMode.ADVENTURE);
 
-        player.sendMessage(
-                Text.literal("This server is invite only, and your account is not activated.")
-                        .styled(style -> style.withColor(Formatting.RED))
-        );
+        player.sendMessage(Text.literal("Your account is not activated.").styled(style -> style.withColor(Formatting.RED)));
 
-        player.sendMessage(
-                Text.literal("Your temporary activation code is: " + code + ". Give this code to the member who invited you.")
-                        .styled(style -> style.withColor(Formatting.YELLOW))
-        );
+        player.sendMessage(Text.literal("If you are a new player or have changed your username recently, you need to activate your account to play.").styled(style -> style.withColor(Formatting.RED)));
 
-        player.sendMessage(
-                Text.literal("This code will expire in " + CODE_EXPIRY_MINUTES + " minutes.")
-                        .styled(style -> style.withColor(Formatting.GRAY))
-        );
+        player.sendMessage(Text.literal("Your temporary activation code is: " + code + ". Give this code to the member who invited you.").styled(style -> style.withColor(Formatting.YELLOW)));
+
+        player.sendMessage(Text.literal("This code will expire in " + CODE_EXPIRY_MINUTES + " minutes.").styled(style -> style.withColor(Formatting.GRAY)));
+    }
+
+    public boolean isExpired() {
+        return System.currentTimeMillis() - timestamp > TimeUnit.MINUTES.toMillis(CODE_EXPIRY_MINUTES);
+    }
+
+    public UUID getPlayerUUID() {
+        return this.playerUUID;
+    }
+
+    public String getPlayerName() {
+        return this.playerName;
     }
 }

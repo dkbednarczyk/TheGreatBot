@@ -11,13 +11,24 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 public class ActivationState extends PersistentState {
     private static final Logger LOGGER = LoggerFactory.getLogger("TheGreatBot-State");
-    public final Set<String> activatedPlayersSet;
-    public String activatedPlayers;
+    private static final Codec<ActivationState> CODEC = Codec.STRING.fieldOf("activatedPlayers").codec().xmap(
+            ActivationState::new,
+            ActivationState::getActivatedPlayers
+    );
+    private static final PersistentStateType<ActivationState> type = new PersistentStateType<>(
+            TheGreatBot.MOD_ID,
+            ActivationState::new,
+            CODEC,
+            null
+    );
+    private final Set<UUID> activatedPlayersSet;
+    private String activatedPlayers;
 
-    private ActivationState(){
+    private ActivationState() {
         activatedPlayers = "";
         activatedPlayersSet = new HashSet<>();
     }
@@ -28,56 +39,40 @@ public class ActivationState extends PersistentState {
 
         for (String p : activatedPlayers.split(",")) {
             if (!p.isEmpty()) {
-                activatedPlayersSet.add(p);
+                activatedPlayersSet.add(UUID.fromString(p));
             }
         }
+    }
+
+    public static ActivationState getServerState(MinecraftServer server) {
+        ServerWorld world = server.getWorld(World.OVERWORLD);
+        assert world != null;
+
+        return world.getPersistentStateManager().getOrCreate(type);
     }
 
     private String getActivatedPlayers() {
         return activatedPlayers;
     }
 
-    private static final Codec<ActivationState> CODEC = Codec.STRING.fieldOf("activatedPlayers").codec().xmap(
-            ActivationState::new,
-            ActivationState::getActivatedPlayers
-    );
-
-    private static final PersistentStateType<ActivationState> type = new PersistentStateType<>(
-            TheGreatBot.MOD_ID,
-            ActivationState::new,
-            CODEC,
-            null
-    );
-
-    public static ActivationState getServerState(MinecraftServer server) {
-        ServerWorld world = server.getWorld(World.OVERWORLD);
-        assert world != null;
-
-        ActivationState state = world.getPersistentStateManager().getOrCreate(type);
-
-        state.markDirty();
-
-        return state;
+    public boolean isActivated(UUID playerUUID) {
+        return activatedPlayersSet.contains(playerUUID);
     }
 
-    public static void appendPlayer(String playerName) {
-        MinecraftServer server = TheGreatBot.SERVER;
-        assert server != null;
-
-        ActivationState state = getServerState(server);
-
-        if (state.activatedPlayersSet.contains(playerName)) {
+    public void activatePlayer(UUID playerUUID, String playerName) {
+        if (activatedPlayersSet.contains(playerUUID)) {
             LOGGER.info("Player {} is already activated.", playerName);
             return;
         }
 
-        if (!state.activatedPlayers.isEmpty()) {
-            state.activatedPlayers += ",";
+        if (!activatedPlayers.isEmpty()) {
+            activatedPlayers += ",";
         }
-        state.activatedPlayers += playerName;
-        state.activatedPlayersSet.add(playerName);
 
-        state.markDirty();
-        LOGGER.info("Player {} has been added to activated players.", playerName);
+        activatedPlayers += playerUUID.toString();
+        activatedPlayersSet.add(playerUUID);
+
+        markDirty();
+        LOGGER.info("Player {} (UUID: {}) has been added to activated players.", playerName, playerUUID);
     }
 }

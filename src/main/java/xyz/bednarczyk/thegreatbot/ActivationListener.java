@@ -11,6 +11,8 @@ import net.minecraft.world.GameMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.UUID;
+
 public class ActivationListener extends ListenerAdapter {
     private static final Logger LOGGER = LoggerFactory.getLogger("TheGreatBot-Discord");
 
@@ -28,26 +30,34 @@ public class ActivationListener extends ListenerAdapter {
             return;
         }
 
-        Activation activation = Activation.pendingActivations.get(content);
+        Activation activation = Activation.get(content);
         if (activation == null) {
             event.getChannel().sendMessage("❌ Invalid or expired activation code.").queue();
             LOGGER.warn("Invalid activation code attempt: {} by user {}", content, event.getAuthor().getAsTag());
             return;
         }
 
+        String playerName = activation.getPlayerName();
+        UUID playerUUID = activation.getPlayerUUID();
+
         // Check if code is expired
         if (activation.isExpired()) {
-            Activation.pendingActivations.remove(content);
+            Activation.remove(content);
             event.getChannel().sendMessage("❌ This activation code has expired.").queue();
-            LOGGER.info("Expired activation code used: {} for player {}", content, activation.playerName);
+            LOGGER.info("Expired activation code used: {} for player {}", content, playerName);
             return;
         }
 
-        String playerName = activation.playerName;
-
         // Remove from pending and add to activated
-        Activation.pendingActivations.remove(content);
-        ActivationState.appendPlayer(playerName);
+        Activation.remove(content);
+
+        if (TheGreatBot.SERVER != null) {
+            ActivationState state = ActivationState.getServerState(TheGreatBot.SERVER);
+            state.activatePlayer(playerUUID, playerName);
+        } else {
+            LOGGER.error("Cannot activate player {} - server instance is null", playerName);
+            return;
+        }
 
         event.getChannel().sendMessage("✅ Player **" + playerName + "** has been activated!").queue();
         LOGGER.info("Player {} activated by Discord user {}", playerName, event.getAuthor().getAsTag());
@@ -62,11 +72,11 @@ public class ActivationListener extends ListenerAdapter {
 
         // Notify the player in-game if they're online
         if (TheGreatBot.SERVER != null) {
-            ServerPlayerEntity player = TheGreatBot.SERVER.getPlayerManager().getPlayer(playerName);
+            ServerPlayerEntity player = TheGreatBot.SERVER.getPlayerManager().getPlayer(playerUUID);
             if (player != null) {
                 player.sendMessage(
                         Text.literal("✓ Your account has been activated! Welcome to the server!")
-                            .styled(style -> style.withColor(Formatting.GREEN))
+                                .styled(style -> style.withColor(Formatting.GREEN))
                 );
 
                 if (!player.isCreative() && !player.isSpectator()) {

@@ -14,6 +14,7 @@ import net.minecraft.world.GameMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -58,10 +59,10 @@ public class TheGreatBot implements ModInitializer {
 
         cleanupExecutor.scheduleAtFixedRate(() -> {
             try {
-                int before = Activation.pendingActivations.size();
-                Activation.pendingActivations.entrySet().removeIf(e -> e.getValue().isExpired());
+                int before = Activation.pendingCount();
+                Activation.cleanupExpired();
 
-                int removed = before - Activation.pendingActivations.size();
+                int removed = before - Activation.pendingCount();
                 if (removed > 0) {
                     LOGGER.info("Cleaned up {} expired activation codes", removed);
                 }
@@ -87,7 +88,8 @@ public class TheGreatBot implements ModInitializer {
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             ServerPlayerEntity player = handler.getPlayer();
-            String playerName = player.getName().getString();
+            String playerName = player.getStringifiedName();
+            UUID playerUUID = player.getUuid();
 
             // Null check for server
             if (SERVER == null) {
@@ -98,13 +100,10 @@ public class TheGreatBot implements ModInitializer {
             try {
                 ActivationState state = ActivationState.getServerState(SERVER);
 
-                // Case-insensitive check for activated players
-                boolean isActivated = state.activatedPlayersSet.stream()
-                        .anyMatch(name -> name.equalsIgnoreCase(playerName));
-
+                var isActivated = state.isActivated(playerUUID);
                 if (!isActivated) {
                     LOGGER.info("Player {} is not activated, starting activation sequence", playerName);
-                    Activation.startActivationSequence(player, playerName);
+                    Activation.startActivationSequence(player);
                     return;
                 }
 
@@ -123,10 +122,10 @@ public class TheGreatBot implements ModInitializer {
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             // Clean up any pending activation when player disconnects
-            String playerName = handler.getPlayer().getName().getString();
-            String code = Activation.findCodeForPlayer(playerName);
-            if (code != null) {
-                Activation.pendingActivations.remove(code);
+            UUID playerUUID = handler.getPlayer().getUuid();
+            String playerName = handler.getPlayer().getStringifiedName();
+
+            if (Activation.removeForPlayer(playerUUID)) {
                 LOGGER.info("Removed pending activation for disconnected player: {}", playerName);
             }
         });
