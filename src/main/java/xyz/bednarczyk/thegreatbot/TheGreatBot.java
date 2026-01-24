@@ -115,15 +115,6 @@ public class TheGreatBot implements ModInitializer {
             }
         });
 
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            // Clean up any pending activation when player disconnects
-            UUID playerUUID = handler.getPlayer().getUuid();
-            String playerName = handler.getPlayer().getStringifiedName();
-
-            if (Activation.removeForPlayer(playerUUID)) {
-                LOGGER.info("Removed pending activation for disconnected player: {}", playerName);
-            }
-        });
 
         LOGGER.info("TheGreatBot initialization complete");
     }

@@ -74,11 +74,6 @@ public class Activation {
         pendingActivations.remove(code);
     }
 
-    static boolean removeForPlayer(UUID playerUUID) {
-        var initialSize = pendingActivations.size();
-        pendingActivations.entrySet().removeIf(entry -> entry.getValue().playerUUID.equals(playerUUID));
-        return pendingActivations.size() < initialSize;
-    }
 
     static void cleanupExpired() {
         pendingActivations.entrySet().removeIf(e -> e.getValue().isExpired());
