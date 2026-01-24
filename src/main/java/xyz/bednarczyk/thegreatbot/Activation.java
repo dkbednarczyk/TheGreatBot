@@ -101,8 +101,8 @@ public class Activation {
                 .append(Text.literal("Give this code to the member who invited you.\n\n").styled(style -> style.withColor(Formatting.GRAY)))
                 .append(Text.literal("This code will expire in " + CODE_EXPIRY_MINUTES + " minutes.").styled(style -> style.withColor(Formatting.BLUE)));
 
-        if (player.getGameMode() != GameMode.SPECTATOR) {
-            player.changeGameMode(GameMode.SPECTATOR);
+        if (player.getGameMode() != GameMode.ADVENTURE) {
+            player.changeGameMode(GameMode.ADVENTURE);
         }
 
         if (player.networkHandler == null) {
