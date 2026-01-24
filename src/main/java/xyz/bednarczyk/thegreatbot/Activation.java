@@ -4,6 +4,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.world.GameMode;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +37,7 @@ public class Activation {
         if (existingCode != null) {
             Activation existing = pendingActivations.get(existingCode);
             if (existing != null && !existing.isExpired()) {
-                sendActivationMessages(player, existingCode);
+                kickWithMessage(player, existingCode);
                 return;
             } else {
                 // Remove expired code
@@ -59,7 +60,7 @@ public class Activation {
         } while (pendingActivations.putIfAbsent(code, new Activation(player)) != null);
 
         LOGGER.info("Generated activation code for player: {}", player.getStringifiedName());
-        sendActivationMessages(player, code);
+        kickWithMessage(player, code);
     }
 
     public static String findCodeForPlayer(UUID playerUUID) {
@@ -93,16 +94,23 @@ public class Activation {
         return pendingActivations.size();
     }
 
-    private static void sendActivationMessages(ServerPlayerEntity player, String code) {
-        player.changeGameMode(GameMode.ADVENTURE);
+    private static void kickWithMessage(@NotNull ServerPlayerEntity player, String code) {
+        Text kickMessage = Text.literal("Your account is not activated.\n").styled(style -> style.withColor(Formatting.RED))
+                .append(Text.literal("This is usually because you are either joining for the first time or your username has changed.\n").styled(style -> style.withColor(Formatting.GRAY)))
+                .append(Text.literal("Your temporary activation code is: " + code + "\n").styled(style -> style.withColor(Formatting.YELLOW)))
+                .append(Text.literal("Give this code to the member who invited you.\n\n").styled(style -> style.withColor(Formatting.GRAY)))
+                .append(Text.literal("This code will expire in " + CODE_EXPIRY_MINUTES + " minutes.").styled(style -> style.withColor(Formatting.BLUE)));
 
-        player.sendMessage(Text.literal("Your account is not activated.").styled(style -> style.withColor(Formatting.RED)));
+        if (player.getGameMode() != GameMode.SPECTATOR) {
+            player.changeGameMode(GameMode.SPECTATOR);
+        }
 
-        player.sendMessage(Text.literal("If you are a new player or have changed your username recently, you need to activate your account to play.").styled(style -> style.withColor(Formatting.RED)));
+        if (player.networkHandler == null) {
+            LOGGER.warn("Player {} network handler is null, cannot kick with activation message", player.getStringifiedName());
+            return;
+        }
 
-        player.sendMessage(Text.literal("Your temporary activation code is: " + code + ". Give this code to the member who invited you.").styled(style -> style.withColor(Formatting.YELLOW)));
-
-        player.sendMessage(Text.literal("This code will expire in " + CODE_EXPIRY_MINUTES + " minutes.").styled(style -> style.withColor(Formatting.GRAY)));
+        player.networkHandler.disconnect(kickMessage);
     }
 
     public boolean isExpired() {

@@ -4,10 +4,6 @@ import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.world.GameMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,23 +64,6 @@ public class ActivationListener extends ListenerAdapter {
             tracking.sendMessage("✅ Player **" + playerName + "** has been activated by <@" + message.getAuthor().getId() + ">.").queue();
         } else {
             LOGGER.error("Tracking channel ID not found: {}", TheGreatBot.CONFIG.trackingChannelId);
-        }
-
-        // Notify the player in-game if they're online
-        if (TheGreatBot.SERVER != null) {
-            ServerPlayerEntity player = TheGreatBot.SERVER.getPlayerManager().getPlayer(playerUUID);
-            if (player != null) {
-                player.sendMessage(
-                        Text.literal("✓ Your account has been activated! Welcome to the server!")
-                                .styled(style -> style.withColor(Formatting.GREEN))
-                );
-
-                if (!player.isCreative() && !player.isSpectator()) {
-                    player.changeGameMode(GameMode.SURVIVAL);
-                }
-
-                LOGGER.info("Notified online player {} of activation", playerName);
-            }
         }
     }
 }
