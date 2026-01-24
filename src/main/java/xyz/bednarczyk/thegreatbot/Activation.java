@@ -31,16 +31,20 @@ public class Activation {
 
     public static void startActivationSequence(ServerPlayerEntity player) {
         UUID playerUUID = player.getUuid();
-        String existingCode = findCodeForPlayer(playerUUID);
 
-        if (existingCode != null) {
-            Activation existing = pendingActivations.get(existingCode);
-            if (existing != null && !existing.isExpired()) {
-                kickWithMessage(player, existingCode);
-                return;
-            } else {
-                // Remove expired code
-                pendingActivations.remove(existingCode);
+        // Find existing activation for this player
+        for (var entry : pendingActivations.entrySet()) {
+            Activation existing = entry.getValue();
+            if (existing.playerUUID.equals(playerUUID)) {
+                if (!existing.isExpired()) {
+                    // Reuse existing valid code
+                    kickWithMessage(player, entry.getKey());
+                    return;
+                } else {
+                    // Remove expired code
+                    pendingActivations.remove(entry.getKey());
+                    break;
+                }
             }
         }
 
@@ -60,15 +64,6 @@ public class Activation {
 
         LOGGER.info("Generated activation code for player: {}", player.getStringifiedName());
         kickWithMessage(player, code);
-    }
-
-    public static String findCodeForPlayer(UUID playerUUID) {
-        for (var entry : pendingActivations.entrySet()) {
-            if (entry.getValue().playerUUID.equals(playerUUID)) {
-                return entry.getKey();
-            }
-        }
-        return null;
     }
 
     static Activation get(String code) {
