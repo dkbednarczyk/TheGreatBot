@@ -1,5 +1,6 @@
 package xyz.bednarczyk.thegreatbot;
 
+import net.minecraft.entity.Entity;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -96,6 +97,7 @@ public class Activation {
         }
 
         player.networkHandler.disconnect(kickMessage);
+        player.remove(Entity.RemovalReason.DISCARDED);
     }
 
     public boolean isExpired() {
