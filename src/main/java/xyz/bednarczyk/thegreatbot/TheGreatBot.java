@@ -6,14 +6,13 @@ import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -22,26 +21,27 @@ public class TheGreatBot implements ModInitializer {
     public static final String MOD_ID = "thegreatbot";
     private static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public static Config CONFIG;
-    public static volatile MinecraftServer SERVER;
-    public static JDA jda;
-    private static ScheduledExecutorService cleanupExecutor;
-
+    private volatile MinecraftServer server;
+    private JDA jda;
+    private ScheduledExecutorService cleanupExecutor;
+    private ActivationService activationService;
 
     @Override
     public void onInitialize() {
         LOGGER.info("Initializing TheGreatBot...");
 
-        CONFIG = Config.load();
-        if (CONFIG == null) {
+        Config config = Config.load();
+        if (config == null) {
             LOGGER.error("Failed to load The Great Bot config file. Mod will not function.");
             return;
         }
 
+        activationService = new ActivationService();
+
         try {
             jda = JDABuilder
-                    .createLight(CONFIG.botToken, GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MESSAGES)
-                    .addEventListeners(new ActivationListener())
+                    .createLight(config.botToken, GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MESSAGES)
+                    .addEventListeners(new ActivationListener(config, activationService, () -> server))
                     .build();
 
             LOGGER.info("Discord bot initialized successfully");
@@ -58,10 +58,10 @@ public class TheGreatBot implements ModInitializer {
 
         cleanupExecutor.scheduleAtFixedRate(() -> {
             try {
-                int before = Activation.pendingCount();
-                Activation.cleanupExpired();
+                int before = activationService.pendingCount();
+                activationService.cleanupExpired();
 
-                int removed = before - Activation.pendingCount();
+                int removed = before - activationService.pendingCount();
                 if (removed > 0) {
                     LOGGER.info("Cleaned up {} expired activation codes", removed);
                 }
@@ -71,12 +71,13 @@ public class TheGreatBot implements ModInitializer {
         }, 5, 5, TimeUnit.MINUTES);
 
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
-            SERVER = server;
+            this.server = server;
             LOGGER.info("Minecraft server starting, TheGreatBot is ready");
         });
 
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+        ServerLifecycleEvents.SERVER_STOPPING.register(_ -> {
             LOGGER.info("Server stopping, shutting down TheGreatBot...");
+            this.server = null;
             if (jda != null) {
                 jda.shutdown();
             }
@@ -85,30 +86,19 @@ public class TheGreatBot implements ModInitializer {
             }
         });
 
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            ServerPlayerEntity player = handler.getPlayer();
-            String playerName = player.getStringifiedName();
-            UUID playerUUID = player.getUuid();
-
-            // Null check for server
-            if (SERVER == null) {
-                LOGGER.error("Server instance is null during player join!");
-                return;
-            }
+        ServerPlayConnectionEvents.JOIN.register((handler, _, server) -> {
+            ServerPlayer player = handler.getPlayer();
+            String playerName = player.getName().getString();
 
             try {
-                ActivationState state = ActivationState.getServerState(SERVER);
-
-                var isActivated = state.isActivated(playerUUID);
+                boolean isActivated = activationService.handlePlayerJoin(server, player);
                 if (!isActivated) {
-                    LOGGER.info("Player {} is not activated, starting activation sequence", playerName);
-                    Activation.startActivationSequence(player);
                     return;
                 }
 
-                player.sendMessage(
-                        Text.literal("Welcome back, " + playerName + "!")
-                                .styled(style -> style.withColor(Formatting.GREEN))
+                player.sendSystemMessage(
+                        Component.literal("Welcome back, " + playerName + "!")
+                                .withStyle(ChatFormatting.GREEN)
                 );
             } catch (Exception e) {
                 LOGGER.error("Error handling player join for {}", playerName, e);
