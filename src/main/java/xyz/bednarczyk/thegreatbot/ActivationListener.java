@@ -1,5 +1,6 @@
 package xyz.bednarczyk.thegreatbot;
 
+import java.util.function.Supplier;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -8,16 +9,21 @@ import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.function.Supplier;
-
 public class ActivationListener extends ListenerAdapter {
-    private static final Logger LOGGER = LoggerFactory.getLogger("TheGreatBot-Discord");
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+        "TheGreatBot-Discord"
+    );
 
     private final Config config;
     private final ActivationService activationService;
     private final Supplier<MinecraftServer> serverSupplier;
 
-    public ActivationListener(Config config, ActivationService activationService, Supplier<MinecraftServer> serverSupplier) {
+    public ActivationListener(
+        Config config,
+        ActivationService activationService,
+        Supplier<MinecraftServer> serverSupplier
+    ) {
         this.config = config;
         this.activationService = activationService;
         this.serverSupplier = serverSupplier;
@@ -25,9 +31,22 @@ public class ActivationListener extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(MessageReceivedEvent event) {
-        if (event.getAuthor().isBot()) return;
-        if (!event.isFromGuild()) return;
-        if (!event.getGuildChannel().getId().equals(config.verificationsChannelId)) return;
+        if (event.getAuthor().isBot()) {
+            return;
+        }
+
+        if (!event.isFromGuild()) {
+            return;
+        }
+
+        boolean inVerificationsChannel = event
+            .getGuildChannel()
+            .getId()
+            .equals(config.verificationsChannelId);
+
+        if (!inVerificationsChannel) {
+            return;
+        }
 
         Message message = event.getMessage();
         String content = message.getContentRaw().trim();
@@ -39,41 +58,99 @@ public class ActivationListener extends ListenerAdapter {
 
         MinecraftServer server = serverSupplier.get();
         if (server == null) {
-            LOGGER.error("Cannot process activation code {} - server instance is null", content);
-            event.getChannel().sendMessage("❌ Minecraft server is not ready right now. Please try again shortly.").queue();
+            LOGGER.error(
+                "Cannot process activation code {}, server instance is null",
+                content
+            );
+
+            event
+                .getChannel()
+                .sendMessage(
+                    "Minecraft server is not available right now. Try again later."
+                )
+                .queue();
+
             return;
         }
 
         String approverTag = event.getAuthor().getAsTag();
         String approverId = message.getAuthor().getId();
+
         var channel = event.getChannel();
         var guild = event.getGuild();
 
         server.execute(() -> {
-            ActivationService.ApprovalResult result = activationService.approveActivation(content);
+            ActivationService.ApprovalResult result =
+                activationService.approveActivation(content);
+
             if (result.status() == ActivationService.Status.INVALID) {
-                channel.sendMessage("❌ Invalid or expired activation code.").queue();
-                LOGGER.warn("Invalid activation code attempt: {} by user {}", content, approverTag);
+                channel
+                    .sendMessage("❌ Invalid or expired activation code.")
+                    .queue();
+
+                LOGGER.warn(
+                    "Invalid activation code attempt: {} by user {}",
+                    content,
+                    approverTag
+                );
+
                 return;
             }
 
             if (result.status() == ActivationService.Status.EXPIRED) {
-                channel.sendMessage("❌ This activation code has expired.").queue();
+                channel
+                    .sendMessage("❌ This activation code has expired.")
+                    .queue();
+
+                LOGGER.warn(
+                    "Expired activation code attempt: {} by user {}",
+                    content,
+                    approverTag
+                );
+
                 return;
             }
 
             Activation activation = result.activation();
             ActivationState state = ActivationState.getServerState(server);
-            state.activatePlayer(activation.getPlayerUUID(), activation.getPlayerName());
+            state.activatePlayer(
+                activation.getPlayerUUID(),
+                activation.getPlayerName()
+            );
 
-            channel.sendMessage("✅ Player **" + activation.getPlayerName() + "** has been activated!").queue();
-            LOGGER.info("Player {} activated by Discord user {}", activation.getPlayerName(), approverTag);
+            channel
+                .sendMessage(
+                    "Player **%s** has been activated!".formatted(
+                        activation.getPlayerName()
+                    )
+                )
+                .queue();
 
-            TextChannel tracking = guild.getChannelById(TextChannel.class, config.trackingChannelId);
+            LOGGER.info(
+                "Player {} activated by Discord user {}",
+                activation.getPlayerName(),
+                approverTag
+            );
+
+            TextChannel tracking = guild.getChannelById(
+                TextChannel.class,
+                config.trackingChannelId
+            );
+
             if (tracking != null) {
-                tracking.sendMessage("✅ Player **" + activation.getPlayerName() + "** has been activated by <@" + approverId + ">.").queue();
+                tracking
+                    .sendMessage(
+                        "Player **%s** has been activated by <@%d>.".formatted(
+                            activation.getPlayerName(),
+                            approverId
+                        )
+                    )
+                    .queue();
             } else {
-                LOGGER.error("Tracking channel ID not found: {}", config.trackingChannelId);
+                LOGGER.error(
+                    "Tracking channel ID not found: {}",
+                    config.trackingChannelId
+                );
             }
         });
     }

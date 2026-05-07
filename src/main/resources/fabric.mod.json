@@ -10,13 +10,10 @@
   "icon": "assets/thegreatbot/icon.png",
   "environment": "server",
   "entrypoints": {
-    "main": [
-      "xyz.bednarczyk.thegreatbot.TheGreatBot"
-    ]
+    "main": ["xyz.bednarczyk.thegreatbot.TheGreatBot"]
   },
   "depends": {
     "fabricloader": ">=${loader_version}",
-    "fabric": "*",
     "minecraft": "${minecraft_version}"
   }
 }

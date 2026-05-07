@@ -1,6 +1,11 @@
 package xyz.bednarczyk.thegreatbot;
 
 import com.mojang.serialization.Codec;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -11,26 +16,28 @@ import net.minecraft.world.level.saveddata.SavedDataType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-
 public class ActivationState extends SavedData {
-    private static final Logger LOGGER = LoggerFactory.getLogger("TheGreatBot-State");
-    private static final Codec<UUID> UUID_CODEC = Codec.STRING.xmap(UUID::fromString, UUID::toString);
-    private static final Codec<ActivationState> CODEC = Codec.either(UUID_CODEC.listOf(), Codec.STRING)
-            .xmap(
-                    value -> value.map(ActivationState::new, ActivationState::fromLegacyString),
-                    state -> com.mojang.datafixers.util.Either.left(state.getActivatedPlayers())
-            );
-    private static final SavedDataType<ActivationState> type = new SavedDataType<>(
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+        "TheGreatBot-State"
+    );
+
+    private static final Codec<UUID> UUID_CODEC = Codec.STRING.xmap(
+        UUID::fromString,
+        UUID::toString
+    );
+
+    private static final Codec<ActivationState> CODEC = UUID_CODEC.listOf()
+        .xmap(ActivationState::new, ActivationState::getActivatedPlayers);
+
+    private static final SavedDataType<ActivationState> type =
+        new SavedDataType<>(
             Identifier.withDefaultNamespace(TheGreatBot.MOD_ID),
             ActivationState::new,
             CODEC,
             DataFixTypes.LEVEL
-    );
+        );
+
     private final Set<UUID> activatedPlayersSet;
 
     private ActivationState() {
@@ -39,16 +46,6 @@ public class ActivationState extends SavedData {
 
     private ActivationState(List<UUID> activatedPlayers) {
         this.activatedPlayersSet = new HashSet<>(activatedPlayers);
-    }
-
-    private static ActivationState fromLegacyString(String activatedPlayers) {
-        List<UUID> parsedPlayers = new ArrayList<>();
-        for (String entry : activatedPlayers.split(",")) {
-            if (!entry.isEmpty()) {
-                parsedPlayers.add(UUID.fromString(entry));
-            }
-        }
-        return new ActivationState(parsedPlayers);
     }
 
     public static ActivationState getServerState(MinecraftServer server) {
@@ -75,6 +72,10 @@ public class ActivationState extends SavedData {
         activatedPlayersSet.add(playerUUID);
 
         setDirty();
-        LOGGER.info("Player {} (UUID: {}) has been added to activated players.", playerName, playerUUID);
+        LOGGER.info(
+            "Player {} (UUID: {}) has been added to activated players.",
+            playerName,
+            playerUUID
+        );
     }
 }
